@@ -2,6 +2,10 @@
 
 **One reliable API in front of every model provider.** A production-pattern gateway for teams running GenAI in production: smart routing with automatic failover, per-target circuit breakers, semantic response caching, per-client rate limits, and cost accounting — all observable through a single `/metrics` endpoint.
 
+![Demo: routed completion, semantic cache hit, and live metrics](docs/demo.gif)
+
+*(recorded with [VHS](https://github.com/charmbracelet/vhs) from [docs/demo.tape](docs/demo.tape) — reproducible against a mock-mode server)*
+
 ## Why
 
 Once more than one team calls more than one model, every service ends up re-implementing the same plumbing: retries, provider outage handling, key management, cost attribution. A gateway centralizes that operational layer so application code makes one call and the platform team keeps control of reliability and spend.
