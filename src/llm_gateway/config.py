@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     breaker_cooldown_seconds: float = 30.0
     retry_attempts: int = 2
 
+    # spend cap (USD) per client key over the accounting window. JSON in env,
+    # e.g. GATEWAY_CLIENT_BUDGETS='{"team-a": 500.0}'. Clients absent from the
+    # map are uncapped.
+    client_budgets: dict[str, float] = {}
+    # "off" never blocks; "soft" allows but flags over-budget clients via the
+    # X-Budget-Status header; "hard" returns 402 once a client is over its cap.
+    budget_enforcement: str = "soft"
+
     # route every request to the offline mock provider (demos / tests)
     mock_mode: bool = False
 

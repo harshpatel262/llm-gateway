@@ -7,9 +7,10 @@ is observable via /metrics.
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Response
 
 from llm_gateway import __version__
+from llm_gateway.budget import BudgetPolicy
 from llm_gateway.cache import SemanticCache
 from llm_gateway.config import Settings, get_settings
 from llm_gateway.costs import CostTracker, estimate_cost
@@ -65,6 +66,7 @@ def create_app(settings: Settings | None = None, router: Router | None = None) -
     )
     limiter = RateLimiter(limits=settings.client_keys)
     costs = CostTracker()
+    budget = BudgetPolicy(caps=settings.client_budgets, mode=settings.budget_enforcement)
 
     def authenticate(api_key: str | None) -> str:
         if not api_key or api_key not in settings.client_keys:
@@ -77,11 +79,21 @@ def create_app(settings: Settings | None = None, router: Router | None = None) -
 
     @app.post("/v1/chat")
     async def chat(
-        request: ChatRequest, x_api_key: str | None = Header(default=None)
+        request: ChatRequest,
+        response: Response,
+        x_api_key: str | None = Header(default=None),
     ) -> ChatResponse:
         client = authenticate(x_api_key)
         if not limiter.allow(client):
             raise HTTPException(status_code=429, detail="rate limit exceeded")
+
+        spent = costs.cost_usd.get(client, 0.0)
+        if budget.should_block(client, spent):
+            raise HTTPException(
+                status_code=402,
+                detail=f"budget exceeded: ${spent:.4f} of ${budget.caps[client]:.2f}",
+            )
+        response.headers["X-Budget-Status"] = budget.status(client, spent)
 
         cached = cache.get(request.model, request.messages)
         if cached is not None:
@@ -100,9 +112,19 @@ def create_app(settings: Settings | None = None, router: Router | None = None) -
     @app.get("/metrics")
     def metrics(x_api_key: str | None = Header(default=None)) -> dict:
         authenticate(x_api_key)
+        budgets = {
+            key: {
+                "cap_usd": cap,
+                "spent_usd": round(costs.cost_usd.get(key, 0.0), 6),
+                "remaining_usd": round(budget.remaining(key, costs.cost_usd.get(key, 0.0)), 6),
+                "status": budget.status(key, costs.cost_usd.get(key, 0.0)),
+            }
+            for key, cap in budget.caps.items()
+        }
         return {
             "cache": {"hits": cache.hits, "misses": cache.misses},
             "clients": costs.snapshot(),
+            "budgets": {"mode": budget.mode, "clients": budgets},
             "circuit_breakers": router.breaker_snapshot(),
         }
 

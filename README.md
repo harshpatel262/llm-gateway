@@ -36,6 +36,7 @@ flowchart LR
 - **Per-target circuit breakers.** A target that fails repeatedly gets its circuit opened and is skipped for a cooldown window, so a degraded provider can't add timeout latency to every request.
 - **Semantic caching.** Prompts are embedded (hashing-trick BOW by default — deterministic, microsecond-fast, zero dependencies) and near-duplicate requests on the same route are served from cache. The embedder is a single pluggable function; swap in a real embedding model for stronger paraphrase recall.
 - **Cost controls.** Every response is priced from a per-model table and attributed to the calling client key; `/metrics` exposes per-client spend, token usage, cache hit rates, and breaker states.
+- **Budget caps.** Each client key can carry a spend cap. Enforcement is configurable: `off` (track only), `soft` (allow but flag over-budget clients via the `X-Budget-Status` response header), or `hard` (return `402 Payment Required` once a client is over its cap). The check runs before routing, so an over-budget client never incurs further spend.
 
 ## API
 
@@ -54,6 +55,9 @@ curl -s localhost:8000/v1/chat \
 curl -s localhost:8000/metrics -H 'X-API-Key: demo-key'
 # => {"cache": {"hits": 3, "misses": 9},
 #     "clients": {"demo-key": {"requests": 12, "cost_usd": 0.004113, ...}},
+#     "budgets": {"mode": "soft",
+#                 "clients": {"demo-key": {"cap_usd": 50.0, "spent_usd": 0.004113,
+#                                          "remaining_usd": 49.995887, "status": "ok"}}},
 #     "circuit_breakers": {"anthropic/claude-sonnet-4-6": {"open": false, ...}}}
 ```
 
@@ -89,13 +93,16 @@ pytest -v
 | `GATEWAY_CACHE_SIMILARITY_THRESHOLD` | `0.97` | Cosine similarity needed for a cache hit |
 | `GATEWAY_BREAKER_FAILURE_THRESHOLD` | `3` | Consecutive failures before a target's circuit opens |
 | `GATEWAY_BREAKER_COOLDOWN_SECONDS` | `30` | How long an open circuit skips its target |
+| `GATEWAY_CLIENT_BUDGETS` | `{}` | JSON map of client API key → USD spend cap |
+| `GATEWAY_BUDGET_ENFORCEMENT` | `soft` | `off`, `soft` (flag via header), or `hard` (402 over cap) |
 | `GATEWAY_MOCK_MODE` | `false` | Route everything to the offline mock provider |
 
 ## Roadmap
 
 - [ ] Streaming (SSE) pass-through with token-level cost metering
 - [ ] Redis backends for cache and rate limits (multi-instance deployments)
-- [ ] Per-client monthly budget caps with hard/soft enforcement
+- [x] Per-client budget caps with hard/soft enforcement
+- [ ] Time-windowed budgets (monthly reset) backed by a durable store
 - [ ] Prometheus exposition format for `/metrics`
 
 ## License
