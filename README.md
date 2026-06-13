@@ -1,5 +1,7 @@
 # LLM Gateway
 
+[![CI](https://github.com/harshpatel262/llm-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/harshpatel262/llm-gateway/actions/workflows/ci.yml)
+
 **One reliable API in front of every model provider.** A production-pattern gateway for teams running GenAI in production: smart routing with automatic failover, per-target circuit breakers, semantic response caching, per-client rate limits, and cost accounting — all observable through a single `/metrics` endpoint.
 
 ![Demo: routed completion, semantic cache hit, and live metrics](docs/demo.gif)
